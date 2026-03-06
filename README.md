@@ -4,15 +4,20 @@
 
 (a) Write a function ```golden_search(f,x_L,x_U,iter)``` that returns ```x_max```, the $x$-location of the maximum of a function $f$; ```f_max```, the maximum value of the function; and ```eb``` the error bound around that maximum point, i.e. the max is located at $x_\text{max}\pm\text{eb}$. The inputs are: ```f```, the anonymous one-dimensional function to be maximized; ```x_L``` and ```x_U```, the lower- and upper-bounds of the maximum search; and ```iter```, the number of iterations to run of the Golden Search.
 
-(b) Check out [this video](https://youtu.be/RihcJR0zvfM?si=FiOdtZ4aMXDl9Xrj). You should see a helicopter whose blade speed lingers at its resonant frequency, leading to it shaking apart. (I think/hope they did this on purpose.) Mathematically, we could model this situation as a mass-spring-damper system, and the response function is
+(b) Check out [this video](https://youtu.be/RihcJR0zvfM?si=FiOdtZ4aMXDl9Xrj). You should see a helicopter whose blade speed lingers at the helicopter body's resonant frequency, leading to it shaking apart. (I think/hope they did this on purpose.) Mathematically, we could model this situation as a mass-spring-damper system, and the response function is
 
 $$
 G(\omega; \omega_n, \zeta) = \frac{\omega_n^2}{\sqrt{(\omega_n^2-\omega^2)^2+4\zeta^2\omega_n^2 \omega^2}}.
 $$
 
-Here $\omega$ is an input frequency (basically the blade rotation speed), $\omega_n$ is the natural frequency of the system, and $\zeta$ is the damping coefficient (a non-dimensional energy loss factor). In designing a helicopter, it is clearly worthwhile to understand what frequencies to avoid as related to the system parameters $\omega_n$ and $\zeta$.
+Here $\omega$ is an input frequency (basically the blade rotation speed), $\omega_n$ is the natural frequency of the helicopter body, and $\zeta$ is the damping coefficient (a non-dimensional energy loss factor). For $\zeta=0.1$, $G$ looks something like this:
 
-Write a script ```freq_response``` that repeatedly calls your Golden Search function to determine the $\omega$-location of the max of $G$ for $\omega_n=2.5$ and $\zeta=0.1\rightarrow 1$ in steps of $0.1$. Your max $\omega$ values should all be between $0$ and $5$. Use $20$ iterations for each search. Store the $\omega$-results in an array ```W_max```, and store the associated "gain" (the max value of $G$) in an array ```G_max```.
+![Response function for $\omega_n=2.5$, $\zeta=0.1$](gain.png)
+
+
+In designing a helicopter, it is clearly worthwhile to understand what frequencies to avoid as related to the system parameters $\omega_n$ and $\zeta$.
+
+Write a script ```freq_response``` that calls your Golden Search function to determine the $\omega$-location of the max of $G$ for $\omega_n=2.5$ and $\zeta=0.1\rightarrow 1$ in steps of $0.1$. Your max $\omega$ values should all be between $0$ and $5$. Use $20$ iterations for each search. Store the $\omega$-results in an array ```W_max```, and store the associated "gain" (the max value of $G$) in an array ```G_max```.
 
 (You will learn more about this behavior system dynamics.)
 

@@ -1,0 +1,1 @@
+Add your golden_search function and freq_response script.

@@ -1,8 +1,11 @@
 # MCEN 3030 Homework 4
 
-I have included a "cooldown" period on the autograder to discourage flurries of repeated submissions. If you push two commits within 5 minutes of each other, the autograder will immediately fail and give the message ```::error::Cooldown active. Please wait _ minute(s) before pushing again.``` If you believe your code is fine and want the autograder to run after the cooldown period, you can simply modify one of your files to add a comment line like ```% ag retry``` or ```# ag retry```. This edit can occur in the web interface or in a new upload. You may alternatively go into the GitHub Actions tab and choose the "Re-run all jobs" button.
+This assignment will be auto-graded, but you have to tell GitHub to check your work. Within your repository, click on "Actions" towards the top, and on the left-hand side you should see "Click here to run grader". Then, you should see "Run workflow" to the right. You can deselect, e.g., Problem 2, if you have no code uploaded for Problem 2 yet. Your last run of the autograder should have all three problems selected for grading.
 
-There is a 3-minute timeout for each problem, in case the code gets stuck in a loop. Reminder: if it is an infinite loop on your machine, it is an infinite loop on GitHub as well -- don't commit that code until you rectify it!
+We have added three checks:
+- There is a "cooldown" period of 5 minutes. You must wait 5 minutes between autograder runs, to encourage you to think about the problems and check that they work on your machine before submitting to the autograder again.
+- The autograder will immediately "fail" if you run the workflow without any changes to your code.
+- There is a 3-minute timeout for each problem, in case the code gets stuck in a loop. Reminder: if it is an infinite loop on your machine, it is an infinite loop on GitHub as well -- don't commit the code until you rectify it on your machine!
 
 
 

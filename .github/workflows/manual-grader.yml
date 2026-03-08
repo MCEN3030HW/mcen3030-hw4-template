@@ -206,45 +206,32 @@ jobs:
       - name: Print Results
         if: always()
         run: |
-          echo "## Autograder Results" >> $GITHUB_STEP_SUMMARY
+          # 1. Gather all results (or mark as Skip/Fail)
+          [ "${{ inputs.grade_p1 }}" == "true" ] && P1A=$(cat p1_a 2>/dev/null || echo "Fail") || P1A="Skip"
+          [ "${{ inputs.grade_p1 }}" == "true" ] && P1B=$(cat p1_b 2>/dev/null || echo "Fail") || P1B="Skip"
+          [ "${{ inputs.grade_p2 }}" == "true" ] && P2A=$(cat p2_a 2>/dev/null || echo "Fail") || P2A="Skip"
+          [ "${{ inputs.grade_p2 }}" == "true" ] && P2B=$(cat p2_b 2>/dev/null || echo "Fail") || P2B="Skip"
+          [ "${{ inputs.grade_p3 }}" == "true" ] && P3A=$(cat p3_a 2>/dev/null || echo "Fail") || P3A="Skip"
+          [ "${{ inputs.grade_p3 }}" == "true" ] && P3B=$(cat p3_b 2>/dev/null || echo "Fail") || P3B="Skip"
           
-          # PROBLEM 1 SUMMARY
-          if [ "${{ inputs.grade_p1 }}" == "true" ]; then
-            P1A=$(cat p1_a 2>/dev/null || echo "Fail")
-            P1B=$(cat p1_b 2>/dev/null || echo "Fail")
-            echo "### Problem 1" >> $GITHUB_STEP_SUMMARY
-            [ "$P1A" == "Pass" ] && echo "- ✅ Part A: General Functionality" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part A: General Functionality (Check if function is generalized!)" >> $GITHUB_STEP_SUMMARY
-            [ "$P1B" == "Pass" ] && echo "- ✅ Part B: freq_response script" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part B: freq_response script" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### Problem 1" >> $GITHUB_STEP_SUMMARY
-            echo "- ⚪ Skipped (Not selected)" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # PROBLEM 2 SUMMARY
-          if [ "${{ inputs.grade_p2 }}" == "true" ]; then
-            P2A=$(cat p2_a 2>/dev/null || echo "Fail")
-            P2B=$(cat p2_b 2>/dev/null || echo "Fail")
-            echo "### Problem 2" >> $GITHUB_STEP_SUMMARY
-            [ "$P2A" == "Pass" ] && echo "- ✅ Part A: General Functionality" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part A: General Functionality (Check inverted bowl test)" >> $GITHUB_STEP_SUMMARY
-            [ "$P2B" == "Pass" ] && echo "- ✅ Part B: SA_driver script" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part B: SA_driver script" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### Problem 2" >> $GITHUB_STEP_SUMMARY
-            echo "- ⚪ Skipped (Not selected)" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # PROBLEM 3 SUMMARY
-          if [ "${{ inputs.grade_p3 }}" == "true" ]; then
-            P3A=$(cat p3_a 2>/dev/null || echo "Fail")
-            P3B=$(cat p3_b 2>/dev/null || echo "Fail")
-            echo "### Problem 3" >> $GITHUB_STEP_SUMMARY
-            [ "$P3A" == "Pass" ] && echo "- ✅ Part A: General Functionality" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part A: General Functionality (Check sinusoid test)" >> $GITHUB_STEP_SUMMARY
-            [ "$P3B" == "Pass" ] && echo "- ✅ Part B: droplet_radiation script" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part B: droplet_radiation script" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### Problem 3" >> $GITHUB_STEP_SUMMARY
-            echo "- ⚪ Skipped (Not selected)" >> $GITHUB_STEP_SUMMARY
-          fi
+          # 2. Secretly print a parseable string to the logs for the Python script to read!
+          echo "GRADER_DATA_EXPORT | P1A:$P1A | P1B:$P1B | P2A:$P2A | P2B:$P2B | P3A:$P3A | P3B:$P3B"
 
-          # Fail the job if any requested problem failed
+          # 3. Print the pretty Markdown summary for the student UI
+          echo "## Autograder Results" >> $GITHUB_STEP_SUMMARY
+          echo "### Problem 1" >> $GITHUB_STEP_SUMMARY
+          [ "$P1A" == "Skip" ] && echo "- ⚪ Skipped" >> $GITHUB_STEP_SUMMARY || ([ "$P1A" == "Pass" ] && echo "- ✅ Part A" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part A") >> $GITHUB_STEP_SUMMARY
+          [ "$P1B" != "Skip" ] && ([ "$P1B" == "Pass" ] && echo "- ✅ Part B" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part B") >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Problem 2" >> $GITHUB_STEP_SUMMARY
+          [ "$P2A" == "Skip" ] && echo "- ⚪ Skipped" >> $GITHUB_STEP_SUMMARY || ([ "$P2A" == "Pass" ] && echo "- ✅ Part A" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part A") >> $GITHUB_STEP_SUMMARY
+          [ "$P2B" != "Skip" ] && ([ "$P2B" == "Pass" ] && echo "- ✅ Part B" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part B") >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Problem 3" >> $GITHUB_STEP_SUMMARY
+          [ "$P3A" == "Skip" ] && echo "- ⚪ Skipped" >> $GITHUB_STEP_SUMMARY || ([ "$P3A" == "Pass" ] && echo "- ✅ Part A" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part A") >> $GITHUB_STEP_SUMMARY
+          [ "$P3B" != "Skip" ] && ([ "$P3B" == "Pass" ] && echo "- ✅ Part B" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part B") >> $GITHUB_STEP_SUMMARY
+
+          # 4. Fail the job if any requested problem failed
           if [ "${{ inputs.grade_p1 }}" == "true" ] && { [ "$P1A" == "Fail" ] || [ "$P1B" == "Fail" ]; }; then exit 1; fi
           if [ "${{ inputs.grade_p2 }}" == "true" ] && { [ "$P2A" == "Fail" ] || [ "$P2B" == "Fail" ]; }; then exit 1; fi
           if [ "${{ inputs.grade_p3 }}" == "true" ] && { [ "$P3A" == "Fail" ] || [ "$P3B" == "Fail" ]; }; then exit 1; fi

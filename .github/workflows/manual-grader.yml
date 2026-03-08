@@ -1,5 +1,6 @@
 # .github/workflows/manual-grader.yml
 name: "👉 Click here to run grader"
+run-name: "Grader: P1:${{ inputs.grade_p1 }} | P2:${{ inputs.grade_p2 }} | P3:${{ inputs.grade_p3 }}"
 
 on:
   workflow_dispatch:

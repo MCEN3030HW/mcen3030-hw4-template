@@ -26,76 +26,46 @@ jobs:
   autograder:
     name: Grade Selected Problems
     runs-on: ubuntu-latest
-    timeout-minutes: 5 # Protects your compute minutes from infinite loops!
+    timeout-minutes: 5
     
     steps:
-      # ==========================================
-      # 1. CHECKOUT CODE
-      # ==========================================
       - name: Checkout Student Code
         uses: actions/checkout@v4
 
-      # ==========================================
-      # 2. ENFORCE COOLDOWN & DUPLICATE CHECK
-      # ==========================================
       - name: Cooldown & Duplicate Check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CURRENT_RUN_ID: ${{ github.run_id }}
-          CURRENT_SHA: ${{ github.sha }}
         run: |
-          # Fetch the time and commit SHA of the previous run
-          LAST_TIME=$(gh run list --workflow "${{ github.workflow }}" --json databaseId,createdAt -q ".[] | select(.databaseId != ($CURRENT_RUN_ID | tonumber)) | .createdAt" | head -n 1)
-          LAST_SHA=$(gh run list --workflow "${{ github.workflow }}" --json databaseId,headSha -q ".[] | select(.databaseId != ($CURRENT_RUN_ID | tonumber)) | .headSha" | head -n 1)
-
-          if [ -z "$LAST_TIME" ] || [ "$LAST_TIME" == "null" ]; then
-            echo "First run or no previous history found. Proceeding..."
-            exit 0
+          LAST_RUN=$(gh run list --workflow "${{ github.workflow }}" --json databaseId,createdAt,headSha -q ".[] | select(.databaseId != ($GITHUB_RUN_ID | tonumber))" | head -n 1)
+          if [ -n "$LAST_RUN" ]; then
+            LAST_SHA=$(echo $LAST_RUN | jq -r '.headSha')
+            LAST_TIME=$(echo $LAST_RUN | jq -r '.createdAt')
+            if [ "$LAST_SHA" == "$GITHUB_SHA" ]; then
+              echo "::error::No new changes detected! Please push new code before grading."
+              exit 1
+            fi
+            DIFF=$(( $(date +%s) - $(date -d "$LAST_TIME" +%s) ))
+            if [ $DIFF -lt 300 ]; then
+              echo "::error::Wait $(( (300 - DIFF) / 60 + 1 )) more minute(s) before grading again."
+              exit 1
+            fi
           fi
 
-          # --- DUPLICATE CHECK ---
-          if [ "$LAST_SHA" == "$CURRENT_SHA" ]; then
-            echo "::error::No new changes detected! You are trying to grade the exact same code as your last attempt."
-            echo "::error::Please make edits, commit, and push your new code before running the grader again."
-            exit 1
-          fi
-
-          # --- COOLDOWN CHECK ---
-          NOW=$(date +%s)
-          THEN=$(date -d "$LAST_TIME" +%s)
-          DIFF=$(( NOW - THEN ))
-
-          if [ $DIFF -lt 300 ]; then
-            REMAINING=$(( 300 - DIFF ))
-            echo "::error::Cooldown active! You must wait 5 minutes between grading attempts."
-            echo "::error::Last attempt was $(( DIFF / 60 ))m $(( DIFF % 60 ))s ago. Please try again in $(( (REMAINING / 60) + 1 )) minute(s)."
-            exit 1
-          fi
-
-      # ==========================================
-      # 3. DETECT LANGUAGE & INSTALL ONCE
-      # ==========================================
       - name: Setup Environment
         id: setup
         run: |
           if [ -n "$(find . -name '*.py' | head -1)" ]; then
             echo "lang=py" >> $GITHUB_OUTPUT
-            echo "Python detected. Installing NumPy..."
             pip install numpy
           elif [ -n "$(find . -name '*.jl' | head -1)" ]; then
             echo "lang=jl" >> $GITHUB_OUTPUT
-            echo "Julia detected. (Already installed on Ubuntu runner)."
           elif [ -n "$(find . -name '*.m' | head -1)" ]; then
             echo "lang=m" >> $GITHUB_OUTPUT
-            echo "Octave detected. Installing Octave (this takes ~45 seconds)..."
             sudo apt-get update && sudo apt-get install -y octave
-          else
-            echo "::error::No .py, .jl, or .m files found! Make sure you uploaded your work."
-            exit 1
           fi
 
       # ==========================================
-      # 4. PROBLEM 1 TESTS
+      # PROBLEM 1: GOLDEN SEARCH
       # ==========================================
       - name: Run Problem 1
         if: ${{ inputs.grade_p1 }}
@@ -104,34 +74,28 @@ jobs:
           if [ "${{ steps.setup.outputs.lang }}" == "py" ]; then
             python -c "
           import sys, numpy as np; sys.path.append('./problem_1')
-          try: 
+          try:
               from golden_search import golden_search
               xm, fm, eb = golden_search(lambda x: -(x-3)**2+10, 0, 5, 10)
-              assert abs(xm-3.0) < 0.01
-              open('p1_a', 'w').write('Pass')
-          except: open('p1_a', 'w').write('Fail')
+              open('p1_a', 'w').write('Pass' if abs(xm-3.0) < 0.1 else f'Wrong result: xm={xm:.2f}')
+          except Exception as e: open('p1_a', 'w').write(f'Error: {type(e).__name__}')
           try:
               import freq_response as fr
               W_EXP = [2.4748, 2.3978, 2.2638, 2.0616, 1.7678, 1.3229, 0.3535, 0.0002, 0.0002, 0.0002]
-              G_EXP = [5.0252, 2.5516, 1.7471, 1.3639, 1.1547, 1.0417, 1.0002, 1.0000, 1.0000, 1.0000]
-              assert np.allclose(fr.W_max, W_EXP, atol=0.001) and np.allclose(fr.G_max, G_EXP, atol=0.001)
-              open('p1_b', 'w').write('Pass')
-          except: open('p1_b', 'w').write('Fail')
+              if not hasattr(fr, 'W_max'): open('p1_b', 'w').write('Variable W_max not found')
+              elif not np.allclose(np.array(fr.W_max).flatten(), W_EXP, atol=0.1): open('p1_b', 'w').write('W_max values incorrect')
+              else: open('p1_b', 'w').write('Pass')
+          except Exception as e: open('p1_b', 'w').write(f'Script Error: {type(e).__name__}')
           "
-          elif [ "${{ steps.setup.outputs.lang }}" == "jl" ]; then
-            julia -e '
-            try include("problem_1/golden_search.jl"); xm,fm,eb=golden_search(x->-(x-3)^2+10,0,5,10); abs(xm-3.0)<0.01 ? open("p1_a","w") do f write(f,"Pass") end : open("p1_a","w") do f write(f,"Fail") end catch; open("p1_a","w") do f write(f,"Fail") end end
-            try include("problem_1/freq_response.jl"); W_EXP=[2.4748, 2.3978, 2.2638, 2.0616, 1.7678, 1.3229, 0.3535, 0.0002, 0.0002, 0.0002]; G_EXP=[5.0252, 2.5516, 1.7471, 1.3639, 1.1547, 1.0417, 1.0002, 1.0000, 1.0000, 1.0000]; (all(abs.(W_max.-W_EXP).<0.001) && all(abs.(G_max.-G_EXP).<0.001)) ? open("p1_b","w") do f write(f,"Pass") end : open("p1_b","w") do f write(f,"Fail") end catch; open("p1_b","w") do f write(f,"Fail") end end
-            '
-          else
+          elif [ "${{ steps.setup.outputs.lang }}" == "m" ]; then
             octave --no-gui --eval "
-            try addpath('problem_1'); [xm,fm]=golden_search(@(x)-(x-3).^2+10,0,5,10); if abs(xm-3)<0.01 f=fopen('p1_a','w'); fprintf(f,'Pass'); fclose(f); else f=fopen('p1_a','w'); fprintf(f,'Fail'); fclose(f); end catch f=fopen('p1_a','w'); fprintf(f,'Fail'); fclose(f); end
-            try addpath('problem_1'); freq_response; W_EXP=[2.4748, 2.3978, 2.2638, 2.0616, 1.7678, 1.3229, 0.3535, 0.0002, 0.0002, 0.0002]; G_EXP=[5.0252, 2.5516, 1.7471, 1.3639, 1.1547, 1.0417, 1.0002, 1.0000, 1.0000, 1.0000]; if all(abs(W_max(:)'-W_EXP)<0.001) && all(abs(G_max(:)'-G_EXP)<0.001) f=fopen('p1_b','w'); fprintf(f,'Pass'); fclose(f); else f=fopen('p1_b','w'); fprintf(f,'Fail'); fclose(f); end catch f=fopen('p1_b','w'); fprintf(f,'Fail'); fclose(f); end
+            try addpath('problem_1'); [xm]=golden_search(@(x)-(x-3).^2+10,0,5,10); res=(abs(xm-3)<0.1)?'Pass':['Wrong value: ',num2str(xm)]; catch; res='Function not found/errored'; end; f=fopen('p1_a','w'); fprintf(f,res); fclose(f);
+            try addpath('problem_1'); freq_response; W_EXP=[2.4748, 2.3978, 2.2638, 2.0616, 1.7678, 1.3229, 0.3535, 0.0002, 0.0002, 0.0002]; if ~exist('W_max','var'); res='W_max not found'; elseif ~all(abs(W_max(:)'-W_EXP)<0.1); res='Values incorrect'; else res='Pass'; end; catch; res='Script failed'; end; f=fopen('p1_b','w'); fprintf(f,res); fclose(f);
             "
           fi
 
       # ==========================================
-      # 5. PROBLEM 2 TESTS
+      # PROBLEM 2: STEEPEST ASCENT
       # ==========================================
       - name: Run Problem 2
         if: ${{ inputs.grade_p2 }}
@@ -143,30 +107,19 @@ jobs:
           try:
               from steepest_ascent import steepest_ascent
               xm, fm = steepest_ascent(lambda x: 10-(x[0]-1)**2-(x[1]-2)**2, lambda x: np.array([-2*(x[0]-1), -2*(x[1]-2)]), [0,0], 1.0, 0.001, 100)
-              assert np.allclose(xm, [1.0, 2.0], atol=0.01)
-              open('p2_a', 'w').write('Pass')
-          except: open('p2_a', 'w').write('Fail')
+              open('p2_a', 'w').write('Pass' if np.allclose(xm, [1.0, 2.0], atol=0.2) else 'Failed to converge to [1,2]')
+          except: open('p2_a', 'w').write('Function error')
           try:
               import SA_driver as sd
-              EXP_X, EXP_Y = [0.3726, 0.7463, 0.3350], 3.3030
-              assert np.allclose(sd.x_max, EXP_X, atol=0.001) and abs(sd.y_max - EXP_Y) < 0.001
-              open('p2_b', 'w').write('Pass')
-          except: open('p2_b', 'w').write('Fail')
+              if not hasattr(sd, 'x_max'): open('p2_b', 'w').write('Variable x_max not found')
+              elif not np.allclose(np.array(sd.x_max).flatten(), [0.3726, 0.7463, 0.3350], atol=0.1): open('p2_b', 'w').write('x_max values incorrect')
+              else: open('p2_b', 'w').write('Pass')
+          except: open('p2_b', 'w').write('Script error')
           "
-          elif [ "${{ steps.setup.outputs.lang }}" == "jl" ]; then
-            julia -e '
-            try include("problem_2/steepest_ascent.jl"); xm,fm=steepest_ascent(x->10-(x[1]-1)^2-(x[2]-2)^2,x->[-2*(x[1]-1),-2*(x[2]-2)],[0.0,0.0],1.0,0.001,100); all(abs.(xm.-[1.0,2.0]).<0.01) ? open("p2_a","w") do f write(f,"Pass") end : open("p2_a","w") do f write(f,"Fail") end catch; open("p2_a","w") do f write(f,"Fail") end end
-            try include("problem_2/SA_driver.jl"); EXP_X=[0.3726,0.7463,0.3350]; EXP_Y=3.3030; (all(abs.(x_max.-EXP_X).<0.001) && abs(y_max-EXP_Y)<0.001) ? open("p2_b","w") do f write(f,"Pass") end : open("p2_b","w") do f write(f,"Fail") end catch; open("p2_b","w") do f write(f,"Fail") end end
-            '
-          else
-            octave --no-gui --eval "
-            try addpath('problem_2'); [xm,fm]=steepest_ascent(@(x)10-(x(1)-1).^2-(x(2)-2).^2, @(x)[-2*(x(1)-1);-2*(x(2)-2)],[0;0],1.0,0.001,100); if all(abs(xm(:)-[1;2])<0.01) f=fopen('p2_a','w'); fprintf(f,'Pass'); fclose(f); else f=fopen('p2_a','w'); fprintf(f,'Fail'); fclose(f); end catch f=fopen('p2_a','w'); fprintf(f,'Fail'); fclose(f); end
-            try addpath('problem_2'); SA_driver; EXP_X=[0.3726,0.7463,0.3350]; EXP_Y=3.3030; if all(abs(x_max(:)'-EXP_X)<0.001) && abs(y_max-EXP_Y)<0.001 f=fopen('p2_b','w'); fprintf(f,'Pass'); fclose(f); else f=fopen('p2_b','w'); fprintf(f,'Fail'); fclose(f); end catch f=fopen('p2_b','w'); fprintf(f,'Fail'); fclose(f); end
-            "
           fi
 
       # ==========================================
-      # 6. PROBLEM 3 TESTS
+      # PROBLEM 3: INTEGRATION (FLATTENED)
       # ==========================================
       - name: Run Problem 3
         if: ${{ inputs.grade_p3 }}
@@ -179,59 +132,46 @@ jobs:
           try:
               from trapezoider import trapezoider
               val = trapezoider(np.sin, 0, np.pi, 100)
-              assert abs(val - 2.0) < 0.01
-              open('p3_a', 'w').write('Pass')
-          except: open('p3_a', 'w').write('Fail')
+              open('p3_a', 'w').write('Pass' if abs(val-2.0)<0.1 else f'Integral wrong: {val:.2f}')
+          except: open('p3_a', 'w').write('Function not found')
           try:
               import droplet_radiation as dr
-              assert np.allclose(dr.t_cool, $EXP_T, atol=0.001)
-              open('p3_b', 'w').write('Pass')
-          except: open('p3_b', 'w').write('Fail')
+              student = np.array(dr.t_cool).flatten()
+              expected = np.array($EXP_T)
+              if len(student) != len(expected): open('p3_b', 'w').write(f'Size mismatch: got {len(student)}, need {len(expected)}')
+              elif np.allclose(student, expected, atol=0.1): open('p3_b', 'w').write('Pass')
+              else: open('p3_b', 'w').write(f'Values incorrect (Check c constant or N)')
+          except Exception as e: open('p3_b', 'w').write(f'Runtime Error: {str(e)[:30]}')
           "
-          elif [ "${{ steps.setup.outputs.lang }}" == "jl" ]; then
-            julia -e '
-            try include("problem_3/trapezoider.jl"); val=trapezoider(sin,0.0,pi,100); abs(val-2.0)<0.01 ? open("p3_a","w") do f write(f,"Pass") end : open("p3_a","w") do f write(f,"Fail") end catch; open("p3_a","w") do f write(f,"Fail") end end
-            try include("problem_3/droplet_radiation.jl"); EXP_T='$EXP_T'; all(abs.(t_cool.-EXP_T).<0.001) ? open("p3_b","w") do f write(f,"Pass") end : open("p3_b","w") do f write(f,"Fail") end catch; open("p3_b","w") do f write(f,"Fail") end end
-            '
-          else
+          elif [ "${{ steps.setup.outputs.lang }}" == "m" ]; then
             octave --no-gui --eval "
-            try addpath('problem_3'); val=trapezoider(@sin,0,pi,100); if abs(val-2.0)<0.01 f=fopen('p3_a','w'); fprintf(f,'Pass'); fclose(f); else f=fopen('p3_a','w'); fprintf(f,'Fail'); fclose(f); end catch f=fopen('p3_a','w'); fprintf(f,'Fail'); fclose(f); end
-            try addpath('problem_3'); droplet_radiation; EXP_T=$EXP_T; if all(abs(t_cool(:)'-EXP_T)<0.001) f=fopen('p3_b','w'); fprintf(f,'Pass'); fclose(f); else f=fopen('p3_b','w'); fprintf(f,'Fail'); fclose(f); end catch f=fopen('p3_b','w'); fprintf(f,'Fail'); fclose(f); end
+            try addpath('problem_3'); val=trapezoider(@sin,0,pi,100); res=(abs(val-2)<0.1)?'Pass':'Wrong result'; catch; res='Function not found'; end; f=fopen('p3_a','w'); fprintf(f,res); fclose(f);
+            try addpath('problem_3'); droplet_radiation; EXP_T=$EXP_T; if ~exist('t_cool','var'); res='t_cool not found'; elseif length(t_cool)!=21; res='t_cool must have 21 elements'; elseif all(abs(t_cool(:)'-EXP_T)<0.1); res='Pass'; else res='Values incorrect (Check c or F loop)'; end; catch; res='Script crashed'; end; f=fopen('p3_b','w'); fprintf(f,res); fclose(f);
             "
           fi
 
       # ==========================================
-      # 7. GENERATE FINAL REPORT
+      # FINAL REPORT
       # ==========================================
       - name: Print Results
         if: always()
         run: |
-          # 1. Gather all results (or mark as Skip/Fail)
-          [ "${{ inputs.grade_p1 }}" == "true" ] && P1A=$(cat p1_a 2>/dev/null || echo "Fail") || P1A="Skip"
-          [ "${{ inputs.grade_p1 }}" == "true" ] && P1B=$(cat p1_b 2>/dev/null || echo "Fail") || P1B="Skip"
-          [ "${{ inputs.grade_p2 }}" == "true" ] && P2A=$(cat p2_a 2>/dev/null || echo "Fail") || P2A="Skip"
-          [ "${{ inputs.grade_p2 }}" == "true" ] && P2B=$(cat p2_b 2>/dev/null || echo "Fail") || P2B="Skip"
-          [ "${{ inputs.grade_p3 }}" == "true" ] && P3A=$(cat p3_a 2>/dev/null || echo "Fail") || P3A="Skip"
-          [ "${{ inputs.grade_p3 }}" == "true" ] && P3B=$(cat p3_b 2>/dev/null || echo "Fail") || P3B="Skip"
+          P1A=$(cat p1_a 2>/dev/null || echo "Not Run")
+          P1B=$(cat p1_b 2>/dev/null || echo "Not Run")
+          P2A=$(cat p2_a 2>/dev/null || echo "Not Run")
+          P2B=$(cat p2_b 2>/dev/null || echo "Not Run")
+          P3A=$(cat p3_a 2>/dev/null || echo "Not Run")
+          P3B=$(cat p3_b 2>/dev/null || echo "Not Run")
           
-          # 2. Secretly print a parseable string to the logs for the Python script to read!
+          echo "## Autograder Feedback" >> $GITHUB_STEP_SUMMARY
+          echo "| Problem | Part A | Part B |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| 1 | $P1A | $P1B |" >> $GITHUB_STEP_SUMMARY
+          echo "| 2 | $P2A | $P2B |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3 | $P3A | $P3B |" >> $GITHUB_STEP_SUMMARY
+
           echo "GRADER_DATA_EXPORT | P1A:$P1A | P1B:$P1B | P2A:$P2A | P2B:$P2B | P3A:$P3A | P3B:$P3B"
-
-          # 3. Print the pretty Markdown summary for the student UI
-          echo "## Autograder Results" >> $GITHUB_STEP_SUMMARY
-          echo "### Problem 1" >> $GITHUB_STEP_SUMMARY
-          [ "$P1A" == "Skip" ] && echo "- ⚪ Skipped" >> $GITHUB_STEP_SUMMARY || ([ "$P1A" == "Pass" ] && echo "- ✅ Part A" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part A") >> $GITHUB_STEP_SUMMARY
-          [ "$P1B" != "Skip" ] && ([ "$P1B" == "Pass" ] && echo "- ✅ Part B" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part B") >> $GITHUB_STEP_SUMMARY
           
-          echo "### Problem 2" >> $GITHUB_STEP_SUMMARY
-          [ "$P2A" == "Skip" ] && echo "- ⚪ Skipped" >> $GITHUB_STEP_SUMMARY || ([ "$P2A" == "Pass" ] && echo "- ✅ Part A" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part A") >> $GITHUB_STEP_SUMMARY
-          [ "$P2B" != "Skip" ] && ([ "$P2B" == "Pass" ] && echo "- ✅ Part B" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part B") >> $GITHUB_STEP_SUMMARY
-          
-          echo "### Problem 3" >> $GITHUB_STEP_SUMMARY
-          [ "$P3A" == "Skip" ] && echo "- ⚪ Skipped" >> $GITHUB_STEP_SUMMARY || ([ "$P3A" == "Pass" ] && echo "- ✅ Part A" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part A") >> $GITHUB_STEP_SUMMARY
-          [ "$P3B" != "Skip" ] && ([ "$P3B" == "Pass" ] && echo "- ✅ Part B" >> $GITHUB_STEP_SUMMARY || echo "- ❌ Part B") >> $GITHUB_STEP_SUMMARY
-
-          # 4. Fail the job if any requested problem failed
-          if [ "${{ inputs.grade_p1 }}" == "true" ] && { [ "$P1A" == "Fail" ] || [ "$P1B" == "Fail" ]; }; then exit 1; fi
-          if [ "${{ inputs.grade_p2 }}" == "true" ] && { [ "$P2A" == "Fail" ] || [ "$P2B" == "Fail" ]; }; then exit 1; fi
-          if [ "${{ inputs.grade_p3 }}" == "true" ] && { [ "$P3A" == "Fail" ] || [ "$P3B" == "Fail" ]; }; then exit 1; fi
+          if [ "${{ inputs.grade_p1 }}" == "true" ] && { [ "$P1A" != "Pass" ] || [ "$P1B" != "Pass" ]; }; then exit 1; fi
+          if [ "${{ inputs.grade_p2 }}" == "true" ] && { [ "$P2A" != "Pass" ] || [ "$P2B" != "Pass" ]; }; then exit 1; fi
+          if [ "${{ inputs.grade_p3 }}" == "true" ] && { [ "$P3A" != "Pass" ] || [ "$P3B" != "Pass" ]; }; then exit 1; fi

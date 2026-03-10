@@ -16,7 +16,7 @@ jobs:
   autograder:
     name: Grade All Problems
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 3
     
     steps:
       - name: Checkout Student Code

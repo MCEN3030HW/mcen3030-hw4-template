@@ -1,13 +1,8 @@
 # MCEN 3030 Homework 4
 
-This assignment will be auto-graded, but you have to tell GitHub to check your work. Within your repository, click on "Actions" towards the top, and on the left-hand side you should see "Click here to run grader". Then, you should see "Run workflow" to the right. You can deselect, e.g., Problem 2, if you have no code uploaded for Problem 2 yet. Your last run of the autograder should have all three problems selected for grading.
+This assignment will be auto-graded, but you have to tell GitHub to check your work. Within your repository, click on "Actions" towards the top, and on the left-hand side you should see "Click here to run grader". Then, you should see "Run workflow" to the right.
 
-We have added three checks:
-- There is a "cooldown" period of 5 minutes. You must wait 5 minutes between autograder runs, to encourage you to think about the problems and check that they work on your machine before submitting to the autograder again.
-- The autograder will immediately "fail" if you run the workflow without any changes to your code.
-- There is a 3-minute timeout for each problem, in case the code gets stuck in a loop. Reminder: if it is an infinite loop on your machine, it is an infinite loop on GitHub as well -- don't commit the code until you rectify it on your machine!
-
-
+If you click on the most recent autograder run, you should be able to scroll down to see "Autograder Feedback". This will let you know what tests you have passed and (hopefully) give you some meaningful feedback about how to fix your code for the tests you have not passed. I encourage you to evaluate your own work before submitting, e.g.: make sure the array has the correct number of elements. 
 
 ## Problem 1
 

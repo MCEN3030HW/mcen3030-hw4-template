@@ -49,7 +49,7 @@ which is obviously hard to visualize, unless you can think in four dimensions! W
 
 Important: You must include a copy of your ```golden_search``` function (.m, .py, or .jl) in both the problem_1 folder and problem_2 folder.
 
-**~See the course website for starter code.~**
+**See the course website for starter code.**
 
 
 ## Problem 3
@@ -76,9 +76,21 @@ and then we can integrate both sides of this equation to determine how long it t
 Write a script called ```droplet_radiation``` that determines the time needed to cool the drop for values of ```F``` between $0$ and $1$, in steps of $0.05$. (So, you will determine 21 values for the cooling times.) Collect the results in an array called ```t_cool```. Use: 
 
 $$
-c=4.3\times 10^{-10}\\
-T_\text{ship}=290\\
-T_\text{initial}=500\\
-T_\text{final}=300\\
+c=4.3\times 10^{-10}
+$$
+
+$$
+T_\text{ship}=290
+$$
+
+$$
+T_\text{initial}=500
+$$
+
+$$
+T_\text{final}=300
+$$
+
+$$
 N=100.
 $$
